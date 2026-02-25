@@ -1,0 +1,21 @@
+Metadata-Version: 2.4
+Name: teleai-zenoh-wrapper
+Version: 0.1.0
+Summary: 基于 Zenoh 的多机器人通信框架，提供 PubSub、RPC 及数据管理功能
+Author: Luluoy
+License-Expression: MIT
+Project-URL: Homepage, https://github.com/Luluoy/teleai-zenoh-wrapper
+Project-URL: Repository, https://github.com/Luluoy/teleai-zenoh-wrapper
+Project-URL: Issues, https://github.com/Luluoy/teleai-zenoh-wrapper/issues
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy<=2.0
+Requires-Dist: typing_extensions==4.15.0
+Requires-Dist: eclipse-zenoh==1.7.2
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-cov>=6.0; extra == "dev"
+Requires-Dist: ruff>=0.11; extra == "dev"
+Provides-Extra: transfer
+Requires-Dist: paramiko>=3.5; extra == "transfer"
+Requires-Dist: h5py>=3.12; extra == "transfer"

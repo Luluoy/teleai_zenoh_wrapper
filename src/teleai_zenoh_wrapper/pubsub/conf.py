@@ -93,10 +93,9 @@ class ZenohConfFactory:
         listen_endpoints: Optional[List[str]] = None,
         mode: str = "peer",
     ) -> "ZenohConfFactory":
-        """创建发布者配置（默认 listen tcp/0.0.0.0:65500）"""
         return cls(
             mode=mode,
-            listen_endpoints=listen_endpoints or ["tcp/0.0.0.0:65500"],
+            listen_endpoints=listen_endpoints if listen_endpoints is not None else [],
         )
 
     @classmethod
@@ -105,10 +104,9 @@ class ZenohConfFactory:
         connect_endpoints: Optional[List[str]] = None,
         mode: str = "peer",
     ) -> "ZenohConfFactory":
-        """创建订阅者配置（默认 connect tcp/127.0.0.1:7447）"""
         return cls(
             mode=mode,
-            connect_endpoints=connect_endpoints or ["tcp/127.0.0.1:7447"],
+            connect_endpoints=connect_endpoints if connect_endpoints is not None else [],
         )
 
     # ────────────────── 链式 setter ──────────────────
