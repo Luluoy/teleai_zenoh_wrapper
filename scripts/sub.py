@@ -7,6 +7,7 @@ from teleai_zenoh_wrapper.infoclasses import ImagePacket224_224_3
 from teleai_zenoh_wrapper import ZenohSub
 from teleai_zenoh_wrapper.pubsub import ZenohConfFactory
 
+import zenoh
 
 def main():
     # 与 pub 端保持一致的 router 地址和 topic
@@ -14,7 +15,7 @@ def main():
     camera_topic = "cameras/realsense_L515"
 
     conf_str = (
-        ZenohConfFactory.create_sub()
+        ZenohConfFactory.create_default()
         .set_mode("client")
         .set_connect_endpoints(zenohd_endpoints)
         .to_str()
@@ -23,9 +24,10 @@ def main():
     print("=== Zenoh Sub 图像显示 ===")
     print(f"连接到 {zenohd_endpoints}, 订阅 topic = {camera_topic}")
 
+    session = zenoh.open(zenoh.Config.from_json5(conf_str))
     sub = ZenohSub(
         data_cls=ImagePacket224_224_3,
-        conf=conf_str,
+        session=session,
         key=camera_topic,
     )
     print("ZenohSub 创建成功，等待第一帧数据 ...")

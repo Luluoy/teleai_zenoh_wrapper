@@ -10,6 +10,7 @@ from teleai_zenoh_wrapper.pubsub import ZenohConfFactory
 
 # 直接复用 teleai_vla_deploy 里的 RealSense 封装
 from realsense import RealSenseCamera
+import zenoh
 
 
 def main():
@@ -17,7 +18,7 @@ def main():
     zenohd_endpoints = ["tcp/192.168.100.10:7447"]  # 按需改成你的 router 地址
 
     conf_str = (
-        ZenohConfFactory.create_pub()
+        ZenohConfFactory.create_default()
         .set_mode("client")
         .set_connect_endpoints(zenohd_endpoints)
         .to_str()
@@ -45,11 +46,13 @@ def main():
     print("=== L515 → 224x224x3 → Zenoh Pub 测试 ===\n")
 
     # 初始化 Zenoh 发布端
+    session = zenoh.open(zenoh.Config.from_json5(conf_str))
+
     print("[1] 正在创建 ZenohPub ...")
     pub = ZenohPub(
         data_cls=ImagePacket224_224_3,
-        conf=conf_str,
         key=camera_topic,
+        session=session,
     )
     print(f"    ZenohPub 创建成功，topic = {camera_topic}\n")
 
