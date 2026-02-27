@@ -8,10 +8,10 @@ from collections import deque
 
 
 class ZenohPub():
-    def __init__(self, data_cls: Type[TimestampedBufPacket], conf: str | None = None, key: str | None = None) -> None:
+    def __init__(self, data_cls: Type[TimestampedBufPacket], conf: str | None = None, key: str | None = None, zenohd_endpoints: list[str] = []) -> None:
         assert key is not None, "必须提供必要的key以供连接。"
         if conf is None:
-            conf = ZenohConfFactory.create_pub().to_str()
+            conf = ZenohConfFactory.create_pub().set_connect_endpoints(zenohd_endpoints).to_str()
         self._conf = zenoh.Config.from_json5(conf)
         self._key = key
         self._data_cls = data_cls
@@ -49,11 +49,12 @@ class ZenohPub():
 
 class ZenohSub():
     def __init__(self, data_cls: Type[TimestampedBufPacket], conf: str | None = None,
-                 key: str | None = None) -> None:
+                 key: str | None = None, zenohd_endpoints: list[str] = []) -> None:
         assert key is not None, "必须提供必要的key以供连接。"
         if conf is None:
             conf = ZenohConfFactory.create_sub() \
             .set_shared_memory(pool_size=33554432) \
+            .set_connect_endpoints(zenohd_endpoints) \
             .to_str()
         
         self._conf = zenoh.Config.from_json5(conf)
@@ -101,11 +102,12 @@ class ZenohSub():
 
 class ZenohQueueSub():
     def __init__(self, data_cls: Type[TimestampedBufPacket], conf: str | None = None,
-                 key: str | None = None) -> None:
+                 key: str | None = None, zenohd_endpoints: list[str] = []) -> None:
         assert key is not None, "必须提供必要的key以供连接。"
         if conf is None:
             conf = ZenohConfFactory.create_sub() \
             .set_shared_memory(pool_size=33554432) \
+            .set_connect_endpoints(zenohd_endpoints) \
             .to_str()
         
         self._conf = zenoh.Config.from_json5(conf)
@@ -155,11 +157,12 @@ class ZenohQueueSub():
 
 class ZenohWildCardSub():
     def __init__(self, data_cls: Type[TimestampedBufPacket], conf: str | None = None,
-                 key: str | None = None) -> None:
+                 key: str | None = None, zenohd_endpoints: list[str] = []) -> None:
         assert key is not None, "必须提供必要的key以供连接。"
         if conf is None:
             conf = ZenohConfFactory.create_sub() \
             .set_shared_memory(pool_size=33554432) \
+            .set_connect_endpoints(zenohd_endpoints) \
             .to_str()
         
         self._conf = zenoh.Config.from_json5(conf)
@@ -208,24 +211,20 @@ class ZenohWildCardSub():
     def __exit__(self, *exc):
         self.close()
 
-
-def main():
+def pub_p():
     from teleai_zenoh_wrapper.infoclasses import ImagePacket640_480_3
     import numpy as np
     from teleai_zenoh_wrapper.utils import get_nano
-
     test_key = "test/zenoh/pubsub"
 
-    print("=== Zenoh PubSub 测试 ===\n")
-
-    # 1. 创建订阅者（先启动，以便不遗漏消息）
-    print("[1] 正在创建 ZenohSub ...")
-    sub = ZenohSub(data_cls=ImagePacket640_480_3, key=test_key)
-    print("    ZenohSub 创建成功，等待连接...\n")
-
-    # 2. 创建发布者
     print("[2] 正在创建 ZenohPub ...")
-    pub = ZenohPub(key=test_key)
+    conf_str = (
+      ZenohConfFactory.create_pub()
+      .set_mode("client")
+      .set_connect_endpoints(["tcp/192.168.100.10:7447"])
+      .to_str()
+    )
+    pub = ZenohPub(data_cls=ImagePacket640_480_3, key=test_key, conf=conf_str)
     print("    ZenohPub 创建成功\n")
 
     # 给 pub/sub 一点时间完成底层连接发现
@@ -245,25 +244,40 @@ def main():
         # print(f"    -> 已发布消息 #{i}: {test_data}")
         time.sleep(0.2)
 
-    # 4. 等待订阅者收到消息
+def sub_p():
+    from teleai_zenoh_wrapper.infoclasses import ImagePacket640_480_3
+    import numpy as np
+    from teleai_zenoh_wrapper.utils import get_nano
+    test_key = "test/zenoh/pubsub"
+
+    print("[1] 正在创建 ZenohSub ...")
+    conf_str = (
+      ZenohConfFactory.create_sub()
+      .set_mode("client")
+      .set_connect_endpoints(["tcp/192.168.100.10:7447"])
+      .to_str()
+    )
+    sub = ZenohSub(data_cls=ImagePacket640_480_3, key=test_key, conf=conf_str)
+    print("    ZenohSub 创建成功，等待连接...\n")
+    sub.wait_for_connection()
+
     print("\n[4] 等待订阅者接收消息 ...")
-    timeout = 3.0
-    start = time.time()
-    while sub.read() is None and (time.time() - start) < timeout:
+    while True:
         time.sleep(0.1)
+        last_pkt = sub.read()
+        if last_pkt is not None:
+            print(f"    最后一条消息时间戳 (ns): {last_pkt.timestamp_ns}")
 
-    # 5. 验证结果
-    print("\n[5] 验证结果:")
-    last_pkt = sub.read()
-    if last_pkt is not None:
-        print(f"    ✅ 订阅者成功接收到消息!")
-        print(f"    最后一条消息时间戳 (ns): {sub.last_recv_ns}")
-        # print(f"    最后一条消息内容: {last_pkt.img_buf}")
-    else:
-        print("    ❌ 订阅者未收到任何消息（超时）")
 
-    print("\n=== 测试完成 ===")
-
+def main():
+    import multiprocessing as mp
+    pub_process = mp.Process(target=pub_p)
+    sub_process = mp.Process(target=sub_p)
+    pub_process.start()
+    sub_process.start()
+    pub_process.join()
+    sub_process.join()
+    print("pub and sub process joined")
 
 if __name__ == "__main__":
     main()

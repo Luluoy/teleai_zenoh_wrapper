@@ -18,6 +18,8 @@ dependencies = [
     "numpy<=2.0",
     "typing_extensions==4.15.0",
     "eclipse-zenoh==1.7.2",
+    "colorlog<=6.10.1",
+    "psutil>=5.9",
 ]
 
 [project.optional-dependencies]
@@ -27,8 +29,8 @@ dev = [
     "ruff>=0.11",
 ]
 transfer = [
-    "paramiko>=3.5",   # sftp 支持
-    "h5py>=3.12",      # hdf5 数据集读写
+    "paramiko>=3.5",   
+    "h5py>=3.12",     
 ]
 
 [project.urls]
