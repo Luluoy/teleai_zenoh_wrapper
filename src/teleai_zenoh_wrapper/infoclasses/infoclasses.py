@@ -112,9 +112,25 @@ class ControlPacket(TimestampedBufPacket):
         }
 
 @dataclass
+class StringPacket(TimestampedBufPacket):
+    INFOSIZE: ClassVar[int] = 1
+    _BUF_FIELD: ClassVar[str] = "string_buf"
+    string_buf: bytes = field(
+        default_factory=lambda: np.zeros(1, dtype=np.uint8).tobytes()
+    )
+
+@dataclass
 class RoboticArmPacket(TimestampedBufPacket):
     INFOSIZE: ClassVar[int] = 32
     _BUF_FIELD: ClassVar[str] = "RoboticArm_buf"
     RoboticArm_buf: bytes = field(
         default_factory=lambda: np.zeros(8, dtype=np.float32).tobytes()
+    )
+
+@dataclass
+class GALAXEARobotPacket(TimestampedBufPacket):
+    INFOSIZE: ClassVar[int] = 80
+    _BUF_FIELD: ClassVar[str] = "GALAXEA_buf"
+    GALAXEA_buf: bytes = field(
+        default_factory=lambda: np.zeros(20, dtype=np.float32).tobytes() + np.zeros(1, dtype=np.uint8).tobytes()
     )

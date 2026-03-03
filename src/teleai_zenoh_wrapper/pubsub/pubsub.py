@@ -1,6 +1,6 @@
 import zenoh
 from threading import Thread, Lock
-from teleai_zenoh_wrapper.infoclasses.base import InfoPacket, TimestampedBufPacket
+from teleai_zenoh_wrapper.infoclasses.base import InfoPacket, TimestampedBufPacket, TimestampedStrPacket
 from teleai_zenoh_wrapper.pubsub.conf import ZenohConfFactory
 from typing import Type
 import time
@@ -8,15 +8,20 @@ from collections import deque
 
 
 class ZenohPub():
-    def __init__(self, data_cls: Type[TimestampedBufPacket], conf: str | None = None, key: str | None = None, zenohd_endpoints: list[str] = []) -> None:
+    def __init__(self, data_cls: Type[TimestampedBufPacket] | Type[TimestampedStrPacket],
+            key: str | None = None,
+            session: zenoh.Session | None = None) -> None:
         assert key is not None, "必须提供必要的key以供连接。"
-        if conf is None:
-            conf = ZenohConfFactory.create_pub().set_connect_endpoints(zenohd_endpoints).to_str()
-        self._conf = zenoh.Config.from_json5(conf)
         self._key = key
         self._data_cls = data_cls
+        self._owns_session = session is None
 
-        self._session = zenoh.open(self._conf)
+        self._session = session
+        if not self._session:
+            self._session = zenoh.open(zenoh.Config.from_json5(
+                        ZenohConfFactory.create_default().to_str())
+                )
+            
         self._pub = self._session.declare_publisher(
             self._key,
             priority=zenoh.Priority.REAL_TIME,
@@ -36,7 +41,9 @@ class ZenohPub():
         except Exception:
             pass
         try:
-            self._session.close()
+            if self._owns_session:
+                self._session.close()
+                self._session = None
         except Exception:
             pass
 
@@ -48,23 +55,23 @@ class ZenohPub():
 
 
 class ZenohSub():
-    def __init__(self, data_cls: Type[TimestampedBufPacket], conf: str | None = None,
-                 key: str | None = None, zenohd_endpoints: list[str] = []) -> None:
+    def __init__(self, data_cls: Type[TimestampedBufPacket] | Type[TimestampedStrPacket],
+                 key: str | None = None,
+                 session: zenoh.Session | None = None) -> None:
         assert key is not None, "必须提供必要的key以供连接。"
-        if conf is None:
-            conf = ZenohConfFactory.create_sub() \
-            .set_shared_memory(pool_size=33554432) \
-            .set_connect_endpoints(zenohd_endpoints) \
-            .to_str()
-        
-        self._conf = zenoh.Config.from_json5(conf)
         self._key = key
         self._data_cls = data_cls
+        self._owns_session = session is None
         self._lock = Lock()
 
         self._info = None
 
-        self._session = zenoh.open(self._conf)
+        self._session = session
+        if not self._session:
+            self._session = zenoh.open(zenoh.Config.from_json5(
+                        ZenohConfFactory.create_default().to_str())
+                )
+
         self._sub = self._session.declare_subscriber(
             self._key,
             self._listen
@@ -90,7 +97,9 @@ class ZenohSub():
         except Exception:
             pass
         try:
-            self._session.close()
+            if self._owns_session:
+                self._session.close()
+                self._session = None
         except Exception:
             pass
 
@@ -101,23 +110,24 @@ class ZenohSub():
         self.close()
 
 class ZenohQueueSub():
-    def __init__(self, data_cls: Type[TimestampedBufPacket], conf: str | None = None,
-                 key: str | None = None, zenohd_endpoints: list[str] = []) -> None:
+    def __init__(self, data_cls: Type[TimestampedBufPacket] | Type[TimestampedStrPacket],
+                 key: str | None = None,
+                 session: zenoh.Session | None = None) -> None:
         assert key is not None, "必须提供必要的key以供连接。"
-        if conf is None:
-            conf = ZenohConfFactory.create_sub() \
-            .set_shared_memory(pool_size=33554432) \
-            .set_connect_endpoints(zenohd_endpoints) \
-            .to_str()
-        
-        self._conf = zenoh.Config.from_json5(conf)
+        self._owns_session = session is None
+       
+                
         self._key = key
         self._data_cls = data_cls
         self._lock = Lock()
 
         self._q = deque(maxlen=1)
+        self._session = session
+        if not self._session:
+            self._session = zenoh.open(zenoh.Config.from_json5(
+                        ZenohConfFactory.create_default().to_str())
+                )
 
-        self._session = zenoh.open(self._conf)
         self._sub = self._session.declare_subscriber(
             self._key,
             self._listen
@@ -145,7 +155,9 @@ class ZenohQueueSub():
         except Exception:
             pass
         try:
-            self._session.close()
+            if self._owns_session:
+                self._session.close()
+                self._session = None
         except Exception:
             pass
 
@@ -156,23 +168,24 @@ class ZenohQueueSub():
         self.close()
 
 class ZenohWildCardSub():
-    def __init__(self, data_cls: Type[TimestampedBufPacket], conf: str | None = None,
-                 key: str | None = None, zenohd_endpoints: list[str] = []) -> None:
+    def __init__(self, data_cls: Type[TimestampedBufPacket] | Type[TimestampedStrPacket],
+                 key: str | None = None,
+                 session: zenoh.Session | None = None) -> None:
         assert key is not None, "必须提供必要的key以供连接。"
-        if conf is None:
-            conf = ZenohConfFactory.create_sub() \
-            .set_shared_memory(pool_size=33554432) \
-            .set_connect_endpoints(zenohd_endpoints) \
-            .to_str()
+        self._owns_session = session is None
         
-        self._conf = zenoh.Config.from_json5(conf)
         self._key = key
         self._data_cls = data_cls
         self._lock = Lock()
 
         self._info = None
 
-        self._session = zenoh.open(self._conf)
+        self._session = session
+        if not self._session:
+            self._session = zenoh.open(zenoh.Config.from_json5(
+                        ZenohConfFactory.create_default().to_str())
+                )
+
         self._sub = self._session.declare_subscriber(
             self._key,
             self._listen
@@ -201,7 +214,9 @@ class ZenohWildCardSub():
         except Exception:
             pass
         try:
-            self._session.close()
+            if self._owns_session:
+                self._session.close()
+                self._session = None
         except Exception:
             pass
 

@@ -4,6 +4,19 @@ import time
 import signal
 import sys
 
+from typing import Callable
+def declare_queryable(session: zenoh.Session, key: str, handler: Callable[[zenoh.Query], None]):
+    queryable = session.declare_queryable(key, handler)
+    return queryable
+
+def call_queryable(session: zenoh.Session, key: str, payload: bytes):
+    replies = session.get(key, payload=payload)
+    
+    for reply in replies:
+        if reply.ok:
+            return json.loads(bytes(reply.ok.payload))
+        else:
+            pass
 
 def server():
     conf = zenoh.Config.from_json5(r'''
@@ -40,7 +53,7 @@ def server():
             json.dumps(result).encode("utf-8"),
         )
 
-    queryable = session.declare_queryable("rpc/math/*", on_query)
+    queryable = declare_queryable(session, "rpc/math/*", on_query)
     print("🚀 RPC 服务已启动，监听 rpc/math/*")
 
     # 优雅退出
@@ -61,7 +74,7 @@ def client():
     conf = zenoh.Config.from_json5(r'''
     {
         mode: "peer",
-        connect: { endpoints: ["tcp/127.0.0.1:7887"] }
+        connect: { endpoints: ["tcp/192.168.100.201:7447"] }
     }
     ''')
 
@@ -86,19 +99,11 @@ def client():
         """
         payload = json.dumps(params).encode("utf-8")
 
-        replies = session.get(
-            service_key,
-            payload=payload,
-            timeout=timeout_s,
-        )
-
-        for reply in replies:
-            if reply.ok:
-                return json.loads(bytes(reply.ok.payload))
-            else:
-                raise RuntimeError(f"RPC 错误: {reply.err}")
-
-        raise TimeoutError(f"RPC 调用 {service_key} 超时 ({timeout_s}s)")
+        replies = call_queryable(session, service_key, payload)
+        if replies:
+            return replies
+        else:
+            raise TimeoutError(f"RPC 调用 {service_key} 超时 ({timeout_s}s)")
 
     # ──── 测试调用 ────
     print("=== RPC 客户端测试 ===\n")
@@ -118,12 +123,12 @@ if __name__ == "__main__":
     import time
     multiprocessing.set_start_method("spawn", force=True)
 
-    server_p = multiprocessing.Process(target=server, name="server")
+    # server_p = multiprocessing.Process(target=server, name="server")
     client_p = multiprocessing.Process(target=client, name="client")
 
-    server_p.start()
+    # server_p.start()
     time.sleep(1.0)
     client_p.start()
 
     client_p.join()
-    server_p.join()
+    # server_p.join()

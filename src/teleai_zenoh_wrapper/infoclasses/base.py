@@ -20,6 +20,55 @@ class InfoPacket(ABC):
 _HEADER_FMT = "!Q"
 _HEADER_SIZE = struct.calcsize(_HEADER_FMT)
 
+# Header: timestamp_ns (uint64, 8 bytes) + str_len (uint32, 4 bytes)
+_STR_LEN_FMT = "!I"
+_STR_LEN_SIZE = struct.calcsize(_STR_LEN_FMT)
+
+
+@dataclass
+class TimestampedStrPacket(InfoPacket):
+    """带 timestamp_ns 头 + 不定长 UTF-8 字符串 payload 的 Zenoh 传输包。
+
+    Wire format:
+        [ timestamp_ns : uint64 (8 bytes, big-endian) ]
+        [ str_len      : uint32 (4 bytes, big-endian) ]
+        [ utf-8 bytes  : str_len bytes                ]
+
+    Example:
+        >>> pkt = TimestampedStrPacket(timestamp_ns=np.uint64(123456789), text="hello")
+        >>> raw = pkt.to_bytes()
+        >>> restored = TimestampedStrPacket.from_bytes(raw)
+        >>> assert restored.text == "hello"
+    """
+
+    timestamp_ns: np.uint64 = field(default_factory=lambda: np.uint64(0))
+    text: str = ""
+
+    def to_bytes(self) -> bytes:
+        encoded = self.text.encode("utf-8")
+        header = struct.pack(_HEADER_FMT, self.timestamp_ns)
+        length = struct.pack(_STR_LEN_FMT, len(encoded))
+        return header + length + encoded
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> Self:
+        min_size = _HEADER_SIZE + _STR_LEN_SIZE
+        if len(data) < min_size:
+            raise ValueError(f"payload too small: {len(data)} < {min_size}")
+
+        timestamp_ns = np.frombuffer(data[:_HEADER_SIZE], dtype=np.uint64, count=1)[0]
+        (str_len,) = struct.unpack_from(_STR_LEN_FMT, data, _HEADER_SIZE)
+
+        payload_start = _HEADER_SIZE + _STR_LEN_SIZE
+        payload_end = payload_start + str_len
+        if len(data) < payload_end:
+            raise ValueError(
+                f"payload truncated: expected {payload_end} bytes, got {len(data)}"
+            )
+
+        text = data[payload_start:payload_end].decode("utf-8")
+        return cls(timestamp_ns=timestamp_ns, text=text)
+
 
 @dataclass
 class TimestampedBufPacket(InfoPacket):

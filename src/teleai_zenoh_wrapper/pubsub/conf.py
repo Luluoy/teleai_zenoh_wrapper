@@ -88,24 +88,15 @@ class ZenohConfFactory:
     # ────────────────── 工厂方法 ──────────────────
 
     @classmethod
-    def create_pub(
+    def create_default(
         cls,
         listen_endpoints: Optional[List[str]] = None,
-        mode: str = "peer",
-    ) -> "ZenohConfFactory":
-        return cls(
-            mode=mode,
-            listen_endpoints=listen_endpoints if listen_endpoints is not None else [],
-        )
-
-    @classmethod
-    def create_sub(
-        cls,
         connect_endpoints: Optional[List[str]] = None,
         mode: str = "peer",
     ) -> "ZenohConfFactory":
         return cls(
             mode=mode,
+            listen_endpoints=listen_endpoints if listen_endpoints is not None else [],
             connect_endpoints=connect_endpoints if connect_endpoints is not None else [],
         )
 

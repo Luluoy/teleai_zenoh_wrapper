@@ -5,9 +5,12 @@ from .infoclasses import (
     U8Packet,
     ControlPacket,
     RoboticArmPacket,
+    GALAXEARobotPacket,
     InferenceResultPacket20_8,
-    InferenceResultPacket50_8
+    InferenceResultPacket50_8,
 )
+
+from .base import TimestampedStrPacket
 
 __all__ = [
     "ImagePacket640_480_3",
@@ -16,6 +19,8 @@ __all__ = [
     "U8Packet",
     "ControlPacket",
     "RoboticArmPacket",
+    "GALAXEARobotPacket",
     "InferenceResultPacket20_8",
-    "InferenceResultPacket50_8"
+    "InferenceResultPacket50_8",
+    "TimestampedStrPacket"
 ]

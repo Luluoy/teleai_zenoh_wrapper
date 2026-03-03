@@ -1,6 +1,8 @@
 numpy<=2.0
 typing_extensions==4.15.0
 eclipse-zenoh==1.7.2
+colorlog<=6.10.1
+psutil>=5.9
 
 [dev]
 pytest>=8.0

@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 src/teleai_zenoh_wrapper/__init__.py
+src/teleai_zenoh_wrapper/_bootstrap.py
 src/teleai_zenoh_wrapper.egg-info/PKG-INFO
 src/teleai_zenoh_wrapper.egg-info/SOURCES.txt
 src/teleai_zenoh_wrapper.egg-info/dependency_links.txt
