@@ -127,3 +127,50 @@ class TimestampedBufPacket(InfoPacket):
         buf = data[_HEADER_SIZE : _HEADER_SIZE + cls.INFOSIZE]
         return cls(timestamp_ns=timestamp_ns, **{cls._BUF_FIELD: buf})
 
+@dataclass
+class TimestampedBytesPacket(InfoPacket):
+    """带 timestamp_ns 头 + 不定长 bytes payload 的 Zenoh 传输包。
+
+    🚨 **警告 / WARNING** 🚨
+    除非你明确知道这些字节流代表着什么（例如接入了特殊的序列化协议、音视频流等），否则请**不要使用**这个类！
+    强烈推荐：对于一切定长的数据类型，最好继承 `TimestampedBufPacket` 并声明一个新的定长 Packet 类型。
+    这能为你带来更严格的内存布局、更安全的类型边界检查以及更高效的解析过程。
+
+    Wire format:
+        [ timestamp_ns  : uint64 (8 bytes, big-endian) ]
+        [ byte_len      : uint32 (4 bytes, big-endian) ]
+        [ bytes payload : byte_len bytes               ]
+
+    Example:
+        >>> pkt = TimestampedBytesPacket(timestamp_ns=np.uint64(123), data=b"\\x01\\x02\\x03")
+        >>> raw = pkt.to_bytes()
+        >>> restored = TimestampedBytesPacket.from_bytes(raw)
+        >>> assert restored.data == b"\\x01\\x02\\x03"
+    """
+
+    timestamp_ns: np.uint64 = field(default_factory=lambda: np.uint64(0))
+    data: bytes = b""
+
+    def to_bytes(self) -> bytes:
+        header = struct.pack(_HEADER_FMT, self.timestamp_ns)
+        length = struct.pack(_STR_LEN_FMT, len(self.data))
+        return header + length + self.data
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> Self:
+        min_size = _HEADER_SIZE + _STR_LEN_SIZE
+        if len(data) < min_size:
+            raise ValueError(f"payload too small: {len(data)} < {min_size}")
+
+        timestamp_ns = np.frombuffer(data[:_HEADER_SIZE], dtype=np.uint64, count=1)[0]
+        (byte_len,) = struct.unpack_from(_STR_LEN_FMT, data, _HEADER_SIZE)
+
+        payload_start = _HEADER_SIZE + _STR_LEN_SIZE
+        payload_end = payload_start + byte_len
+        if len(data) < payload_end:
+            raise ValueError(
+                f"payload truncated: expected {payload_end} bytes, got {len(data)}"
+            )
+
+        payload = data[payload_start:payload_end]
+        return cls(timestamp_ns=timestamp_ns, data=payload)

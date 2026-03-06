@@ -33,19 +33,31 @@ def _make_image_packet(h: int, w: int, c: int):
     _Cls.__doc__ = f"{h}x{w}x{c} 图像 + 时间戳(ns)消息。"
     return _Cls
 
-def _make_infrence_result_packet(cs: int, dim: int):
+def _make_infrence_result_packet(cs: int, dim: int, batchsize: int|None = None):
     """
     Factory function to generate Inference result dataclass for specified resolution.
 
     Args:
         cs : chunk size
         dim: robotic arm dofs
-
+        batchsize: optional batch size for multi-robot scenarios. 
+                   If None, retains default (cs, dim) behavior.
 
     Returns:
         Inference result dataclass(TimestampedBufPacket)
     """
-    size = cs * dim * 4
+    if batchsize is None:
+        shape = (cs, dim)
+        elements = cs * dim
+        name_suffix = f"{cs}_{dim}"
+        doc_prefix = f"{cs}x{dim}"
+    else:
+        shape = (batchsize, cs, dim)
+        elements = batchsize * cs * dim
+        name_suffix = f"{batchsize}_{cs}_{dim}"
+        doc_prefix = f"{batchsize}x{cs}x{dim}"
+
+    size = elements * 4  # float32 = 4 bytes
 
     @dataclass
     class _Cls(TimestampedBufPacket):
@@ -55,7 +67,7 @@ def _make_infrence_result_packet(cs: int, dim: int):
         inference_start_nanosec: int = 0
         fps: int = 0
         inference_result_buf: bytes = field(
-            default_factory=lambda: np.zeros((cs, dim), dtype=np.float32).tobytes()
+            default_factory=lambda: np.zeros(shape, dtype=np.float32).tobytes()
         )
         
         def to_bytes(self) -> bytes:
@@ -74,8 +86,8 @@ def _make_infrence_result_packet(cs: int, dim: int):
             buf = data[20 : expected]
             return cls(timestamp_ns=timestamp_ns, inference_start_nanosec=inference_start_nanosec, fps=fps, inference_result_buf=buf)
 
-    _Cls.__name__ = _Cls.__qualname__ = f"InferenceResultPacket{cs}_{dim}"
-    _Cls.__doc__ = f"{cs}x{dim} 推理结果 + 时间戳(ns)消息。"
+    _Cls.__name__ = _Cls.__qualname__ = f"InferenceResultPacket{name_suffix}"
+    _Cls.__doc__ = f"{doc_prefix} 推理结果 + 时间戳(ns)消息。"
     return _Cls
 
 ImagePacket640_480_3  = _make_image_packet(640, 480, 3)
@@ -83,7 +95,9 @@ ImagePacket960_540_3  = _make_image_packet(960, 540, 3)
 ImagePacket224_224_3  = _make_image_packet(224, 224, 3)
 
 InferenceResultPacket20_8 = _make_infrence_result_packet(cs=20, dim=8)
+InferenceResultPacket20_16 = _make_infrence_result_packet(cs=20, dim=16)
 InferenceResultPacket50_8 = _make_infrence_result_packet(cs=50, dim=8)
+InferenceResultPacket3_20_16 = _make_infrence_result_packet(cs=20, dim=16, batchsize=3)
 
 @dataclass
 class U8Packet(TimestampedBufPacket):
@@ -112,14 +126,6 @@ class ControlPacket(TimestampedBufPacket):
         }
 
 @dataclass
-class StringPacket(TimestampedBufPacket):
-    INFOSIZE: ClassVar[int] = 1
-    _BUF_FIELD: ClassVar[str] = "string_buf"
-    string_buf: bytes = field(
-        default_factory=lambda: np.zeros(1, dtype=np.uint8).tobytes()
-    )
-
-@dataclass
 class RoboticArmPacket(TimestampedBufPacket):
     INFOSIZE: ClassVar[int] = 32
     _BUF_FIELD: ClassVar[str] = "RoboticArm_buf"
@@ -128,9 +134,33 @@ class RoboticArmPacket(TimestampedBufPacket):
     )
 
 @dataclass
+class SingleEEFPosePacket(TimestampedBufPacket):
+    INFOSIZE: ClassVar[int] = 32
+    _BUF_FIELD: ClassVar[str] = "Pose_buf"
+    Pose_buf: bytes = field(
+        default_factory=lambda: np.zeros(8, dtype=np.float32).tobytes()
+    )
+
+@dataclass
+class DualEEFPosePacket(TimestampedBufPacket):
+    INFOSIZE: ClassVar[int] = 64
+    _BUF_FIELD: ClassVar[str] = "Pose_buf"
+    Pose_buf: bytes = field(
+        default_factory=lambda: np.zeros(16, dtype=np.float32).tobytes()
+    )
+
+@dataclass
 class GALAXEARobotPacket(TimestampedBufPacket):
     INFOSIZE: ClassVar[int] = 80
     _BUF_FIELD: ClassVar[str] = "GALAXEA_buf"
     GALAXEA_buf: bytes = field(
         default_factory=lambda: np.zeros(20, dtype=np.float32).tobytes() + np.zeros(1, dtype=np.uint8).tobytes()
+    )
+
+@dataclass
+class ARXRobotPacket(TimestampedBufPacket):
+    INFOSIZE: ClassVar[int] = 56
+    _BUF_FIELD: ClassVar[str] = "ARX_buf"
+    ARX_buf: bytes = field(
+        default_factory=lambda: np.zeros(14, dtype=np.float32).tobytes()
     )

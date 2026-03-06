@@ -2,11 +2,15 @@ import os
 import time
 
 import ctypes
-import os
 import logging
 import sys
 
 import colorlog
+import numpy as np
+import zenoh
+from teleai_zenoh_wrapper import ZenohPub
+from teleai_zenoh_wrapper.infoclasses import TimestampedStrPacket
+from teleai_zenoh_wrapper.pubsub import ZenohConfFactory
 
 
 class EndAwareLogger(logging.Logger):
@@ -14,9 +18,45 @@ class EndAwareLogger(logging.Logger):
 
     Backward-compatible: existing `logger.info("...")` calls keep working.
     New: `logger.info("...", end="")` (or any string) controls the handler terminator.
+    Added: `logger.info("...", topic="my/topic")` automatically publishes the message 
+           via Zenoh to the specified topic using TimestampedStrPacket.
     """
 
-    # Match stdlib signature but tolerate extra kwargs (like `end`).
+    def _publish_zenoh(self, topic, msg, args):
+        # 懒加载初始化单例 session 和 pubs 字典
+        if not hasattr(self, '_zenoh_session') or self._zenoh_session is None:
+            self._zenoh_session = zenoh.open(zenoh.Config.from_json5(
+                ZenohConfFactory.create_default().to_str()
+            ))
+        
+        if not hasattr(self, '_zenoh_pubs'):
+            self._zenoh_pubs = {}
+            
+        # 若没有相同 topic 的实例，则声明一个
+        if topic not in self._zenoh_pubs:
+            self._zenoh_pubs[topic] = ZenohPub(
+                data_cls=TimestampedStrPacket,
+                key=topic,
+                session=self._zenoh_session
+            )
+            
+        # 格式化字符串信息
+        if args:
+            try:
+                formatted_msg = msg % args
+            except Exception:
+                formatted_msg = str(msg)
+        else:
+            formatted_msg = str(msg)
+            
+        # 构造变长的 str 信息 packet 并发布
+        pkt = TimestampedStrPacket(
+            timestamp_ns=np.uint64(time.time_ns()),
+            text=formatted_msg
+        )
+        self._zenoh_pubs[topic].write(pkt)
+
+    # Match stdlib signature but tolerate extra kwargs (like `end` and `topic`).
     def _log(
         self,
         level,
@@ -31,12 +71,26 @@ class EndAwareLogger(logging.Logger):
         _sentinel = object()
         end = kwargs.pop("end", _sentinel)
         flush = kwargs.pop("flush", _sentinel)
+        topic = kwargs.pop("topic", _sentinel)
 
         if kwargs:
             # Preserve default behavior: unknown kwargs should still be an error
             # to avoid silently swallowing mistakes.
             unknown = ", ".join(sorted(kwargs.keys()))
             raise TypeError(f"unexpected keyword argument(s): {unknown}")
+        
+        # 提取到 topic 之后，将内容通过 Zenoh 发送
+        if topic is not _sentinel and topic:
+            try:
+                self._publish_zenoh(topic, msg, args)
+            except Exception as e:
+                # 捕获并打印 Zenoh 相关异常，防止打断原有 Logger 的正常执行
+                super()._log(
+                    logging.ERROR, 
+                    f"Zenoh publish failed for topic {topic}: {e}", 
+                    (), 
+                    stacklevel=stacklevel
+                )
 
         if extra is None:
             extra = {}
@@ -141,8 +195,6 @@ class Timespec(ctypes.Structure):
 
 libc = ctypes.CDLL("libc.so.6")
 nanosleep_func = libc.nanosleep
-
-
 
 def nano_sleep(ns):
     req = Timespec(ns // 1_000_000_000, ns % 1_000_000_000)
